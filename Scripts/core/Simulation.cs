@@ -1,11 +1,8 @@
-// Assets/Scripts/Core/Simulation.cs
-// Applique les règles de Conway. Déterministe : pas de Random, pas de Time.
-
 using System;
 
 public class Simulation
 {
-    public GridModel Grid { get; }
+    public GridModel Grid { get; private set; }
     public IBorderRule BorderRule { get; set; }
     public int Generation { get; private set; }
 
@@ -13,6 +10,7 @@ public class Simulation
 
     private bool[] _next;
 
+    // Setup simulation
     public Simulation(GridModel grid, IBorderRule borderRule)
     {
         Grid = grid;
@@ -20,40 +18,68 @@ public class Simulation
         _next = new bool[grid.Width * grid.Height];
     }
 
+    // Next generation
     public void Step()
     {
-        int w = Grid.Width, h = Grid.Height;
+        int w = Grid.Width;
+        int h = Grid.Height;
 
         for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++)
         {
-            int n = CountNeighbours(x, y);
-            bool alive = Grid.Get(x, y);
+            for (int x = 0; x < w; x++)
+            {
+                int n = CountNeighbours(x, y);
+                bool alive = Grid.Get(x, y);
+                bool nextAlive;
 
-            // Morte + 3 voisines → naît ; vivante + 2 ou 3 → survit ; sinon meurt.
-            _next[y * w + x] = alive ? (n == 2 || n == 3) : (n == 3);
+                if (alive)
+                {
+                    nextAlive = (n == 2 || n == 3);
+                }
+                else
+                {
+                    nextAlive = (n == 3);
+                }
+
+                _next[y * w + x] = nextAlive;
+            }
         }
 
-        // On a lu uniquement l'ancienne génération, on bascule d'un coup.
         Grid.SwapBuffer(ref _next);
         Generation++;
         OnGridChanged?.Invoke();
     }
 
+    // Count Moore neighbours
     private int CountNeighbours(int x, int y)
     {
         int count = 0;
         for (int dy = -1; dy <= 1; dy++)
-        for (int dx = -1; dx <= 1; dx++)
         {
-            if (dx == 0 && dy == 0) continue;
-            if (BorderRule.IsAlive(Grid, x + dx, y + dy)) count++;
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dy == 0)
+                {
+                    continue;
+                }
+                if (BorderRule.IsAlive(Grid, x + dx, y + dy))
+                {
+                    count++;
+                }
+            }
         }
         return count;
     }
 
-    /// chargement png
-    public void NotifyChanged() => OnGridChanged?.Invoke();
+    // Force refresh
+    public void NotifyChanged()
+    {
+        OnGridChanged?.Invoke();
+    }
 
-    public void ResetGeneration() => Generation = 0;
+    // Reset counter
+    public void ResetGeneration()
+    {
+        Generation = 0;
+    }
 }
