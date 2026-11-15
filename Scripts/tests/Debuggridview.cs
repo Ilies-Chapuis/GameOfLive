@@ -1,21 +1,3 @@
-// Assets/Scripts/tests/DebugGridView.cs
-// AFFICHAGE TEMPORAIRE pour tester le moteur avant que l'affichage d'Ilies soit prêt.
-// À mettre sur le même GameObject que Game, puis lancer Play.
-// Utilise OnGUI : marche sans Canvas, sans caméra spéciale et sans réglage d'Input System.
-//
-// Contrôles :
-//   Espace       = Play / Pause
-//   Flèche droite = 1 génération (pas-à-pas)
-//   + / -        = plus vite / moins vite
-//   B            = changer le mode de bord (Infini / Symétrique)
-//   R            = remplir au hasard
-//   G            = poser un planeur
-//   C            = tout effacer
-//   S            = sauvegarder la grille en PNG
-//   L            = charger la dernière sauvegarde
-//   O            = ouvrir le dossier des sauvegardes
-//   Clic gauche  = allumer / éteindre une cellule (maintenir pour peindre)
-
 using System;
 using System.IO;
 using System.Linq;
@@ -36,209 +18,313 @@ public class DebugGridView : MonoBehaviour
     private string _message = "";
 
     private static readonly Color32 Alive = new Color32(255, 255, 255, 255);
-    private static readonly Color32 Dead  = new Color32(0, 0, 0, 255);
+    private static readonly Color32 Dead = new Color32(0, 0, 0, 255);
 
+    // Hook events
     private void Start()
     {
-        if (controller == null) controller = GetComponent<Game>();
         if (controller == null)
         {
-            Debug.LogError("DebugGridView : mets ce script sur le même objet que Game.");
+            controller = GetComponent<Game>();
+        }
+        if (controller == null)
+        {
+            Debug.LogError("DebugGridView: put this script on the same object as Game.");
             enabled = false;
             return;
         }
 
         controller.GridReplaced += OnGridReplaced;
-        controller.GridChanged  += Redraw;
+        controller.GridChanged += Redraw;
 
-        // La grille a déjà été créée dans Awake du controller : on la lit directement.
         OnGridReplaced(controller.Grid);
-        if (randomFillAtStart) RandomFill();
+        if (randomFillAtStart)
+        {
+            RandomFill();
+        }
     }
 
+    // Unhook events
     private void OnDestroy()
     {
-        if (controller == null) return;
+        if (controller == null)
+        {
+            return;
+        }
         controller.GridReplaced -= OnGridReplaced;
-        controller.GridChanged  -= Redraw;
+        controller.GridChanged -= Redraw;
     }
 
-    // ---------- Texture ----------
-
+    // Rebuild texture
     private void OnGridReplaced(GridModel grid)
     {
-        if (_texture != null) Destroy(_texture);
-        _texture = new Texture2D(grid.Width, grid.Height, TextureFormat.RGBA32, false)
+        if (_texture != null)
         {
-            filterMode = FilterMode.Point,   // pixels nets, pas de flou
-            wrapMode   = TextureWrapMode.Clamp
-        };
+            Destroy(_texture);
+        }
+        _texture = new Texture2D(grid.Width, grid.Height, TextureFormat.RGBA32, false);
+        _texture.filterMode = FilterMode.Point;
+        _texture.wrapMode = TextureWrapMode.Clamp;
         _pixels = new Color32[grid.Width * grid.Height];
         Redraw();
     }
 
+    // Repaint texture
     private void Redraw()
     {
         GridModel g = controller.Grid;
-        if (g == null || _texture == null) return;
+        if (g == null || _texture == null)
+        {
+            return;
+        }
 
         for (int y = 0; y < g.Height; y++)
-        for (int x = 0; x < g.Width; x++)
-            _pixels[y * g.Width + x] = g.Get(x, y) ? Alive : Dead;
+        {
+            for (int x = 0; x < g.Width; x++)
+            {
+                if (g.Get(x, y))
+                {
+                    _pixels[y * g.Width + x] = Alive;
+                }
+                else
+                {
+                    _pixels[y * g.Width + x] = Dead;
+                }
+            }
+        }
 
         _texture.SetPixels32(_pixels);
         _texture.Apply();
     }
 
-    // ---------- Actions de test ----------
-
+    // Random fill
     private void RandomFill()
     {
         GridModel g = controller.Grid;
-        var rng = new System.Random(randomSeed + _seedOffset++);
+        System.Random rng = new System.Random(randomSeed + _seedOffset);
+        _seedOffset++;
         controller.Clear();
         for (int y = 0; y < g.Height; y++)
-        for (int x = 0; x < g.Width; x++)
-            if (rng.NextDouble() < randomDensity) g.Set(x, y, true);
+        {
+            for (int x = 0; x < g.Width; x++)
+            {
+                if (rng.NextDouble() < randomDensity)
+                {
+                    g.Set(x, y, true);
+                }
+            }
+        }
         controller.Sim.NotifyChanged();
     }
 
+    // Spawn glider
     private void PlaceGlider()
     {
         GridModel g = controller.Grid;
-        int cx = g.Width / 2, cy = g.Height / 2;
-        // Planeur qui part vers le bas à droite (y = 0 en bas de l'écran).
-        controller.SetCell(cx,     cy + 1, true);
-        controller.SetCell(cx + 1, cy,     true);
+        int cx = g.Width / 2;
+        int cy = g.Height / 2;
+        controller.SetCell(cx, cy + 1, true);
+        controller.SetCell(cx + 1, cy, true);
         controller.SetCell(cx - 1, cy - 1, true);
-        controller.SetCell(cx,     cy - 1, true);
+        controller.SetCell(cx, cy - 1, true);
         controller.SetCell(cx + 1, cy - 1, true);
     }
 
-    // ---------- Sauvegarde / chargement ----------
-
+    // Save PNG
     private void Save()
     {
         try
         {
-            string name = "grille_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            string name = "grid_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
             string path = PngGridSerializer.Save(controller.Grid, name);
-            _message = "Sauvegardé : " + Path.GetFileName(path);
-            Debug.Log("Sauvegarde : " + path);
+            _message = "Saved: " + Path.GetFileName(path);
+            Debug.Log("Saved: " + path);
         }
         catch (Exception ex)
         {
-            _message = "Erreur de sauvegarde : " + ex.Message;
+            _message = "Save error: " + ex.Message;
             Debug.LogError(ex);
         }
     }
 
+    // Load latest PNG
     private void LoadLatest()
     {
         try
         {
             string folder = PngGridSerializer.SaveFolder;
-            string latest = Directory.Exists(folder)
-                ? new DirectoryInfo(folder).GetFiles("*.png")
-                    .OrderByDescending(f => f.LastWriteTime)
-                    .Select(f => f.FullName)
-                    .FirstOrDefault()
-                : null;
-
-            if (latest == null)
+            if (!Directory.Exists(folder))
             {
-                _message = "Aucune sauvegarde trouvée (appuie d'abord sur S).";
+                _message = "No save found (press S first).";
                 return;
             }
 
-            GridModel loaded = PngGridSerializer.Load(latest);
-            controller.LoadGrid(loaded, controller.CurrentBorderMode); // garde le mode de bord actuel
-            _message = "Chargé : " + Path.GetFileName(latest);
+            FileInfo latest = new DirectoryInfo(folder)
+                .GetFiles("*.png")
+                .OrderByDescending(f => f.LastWriteTime)
+                .FirstOrDefault();
+
+            if (latest == null)
+            {
+                _message = "No save found (press S first).";
+                return;
+            }
+
+            GridModel loaded = PngGridSerializer.Load(latest.FullName);
+            controller.LoadGrid(loaded, controller.CurrentBorderMode);
+            _message = "Loaded: " + latest.Name;
         }
         catch (Exception ex)
         {
-            _message = "Erreur de chargement : " + ex.Message;
+            _message = "Load error: " + ex.Message;
             Debug.LogError(ex);
         }
     }
 
+    // Open saves folder
     private void OpenSaveFolder()
     {
         Directory.CreateDirectory(PngGridSerializer.SaveFolder);
         Application.OpenURL("file:///" + PngGridSerializer.SaveFolder.Replace('\\', '/'));
-        _message = "Dossier : " + PngGridSerializer.SaveFolder;
+        _message = "Folder: " + PngGridSerializer.SaveFolder;
     }
 
-    // ---------- Affichage + entrées ----------
-
+    // Draw UI
     private void OnGUI()
     {
-        if (_texture == null) return;
+        if (_texture == null)
+        {
+            return;
+        }
         GridModel g = controller.Grid;
+
+        float ui = Mathf.Max(1f, Screen.height / 720f);
+        GUI.matrix = Matrix4x4.Scale(new Vector3(ui, ui, 1f));
+        float sw = Screen.width / ui;
+        float sh = Screen.height / ui;
 
         HandleInput(Event.current, g);
 
-        // Place la grille au centre, en gardant des cellules carrées.
-        const float top = 80f, margin = 10f;
-        float availW = Screen.width - 2 * margin;
-        float availH = Screen.height - top - margin;
+        float top = 80f;
+        float margin = 10f;
+        float availW = sw - 2 * margin;
+        float availH = sh - top - margin;
         float cell = Mathf.Min(availW / g.Width, availH / g.Height);
-        float w = cell * g.Width, h = cell * g.Height;
-        _gridRect = new Rect((Screen.width - w) / 2f, top + (availH - h) / 2f, w, h);
+        float w = cell * g.Width;
+        float h = cell * g.Height;
+        _gridRect = new Rect((sw - w) / 2f, top + (availH - h) / 2f, w, h);
 
         GUI.DrawTexture(_gridRect, _texture);
 
-        string etat = controller.IsPlaying ? "LECTURE" : "PAUSE";
-        GUI.Label(new Rect(10, 5, Screen.width - 20, 25),
-            $"{etat}   Génération : {controller.Generation}   Vivantes : {g.CountAlive()}   " +
-            $"Bord : {controller.CurrentBorderMode}   Vitesse : {controller.TicksPerSecond:0.#} /s   Taille : {g.Width}×{g.Height}");
-        GUI.Label(new Rect(10, 28, Screen.width - 20, 25),
-            "Espace = Play/Pause   Flèche droite = pas-à-pas   +/- = vitesse   B = bord   R = hasard   G = planeur   C = effacer   " +
-            "S = sauver   L = charger   O = dossier   Clic = cellule");
-        GUI.Label(new Rect(10, 51, Screen.width - 20, 25), _message);
+        string state = "PAUSED";
+        if (controller.IsPlaying)
+        {
+            state = "PLAYING";
+        }
+
+        GUI.Label(new Rect(10, 5, sw - 20, 25),
+            state + "   Generation: " + controller.Generation + "   Alive: " + g.CountAlive() +
+            "   Border: " + controller.CurrentBorderMode + "   Speed: " + controller.TicksPerSecond.ToString("0.#") +
+            "/s   Size: " + g.Width + "x" + g.Height);
+        GUI.Label(new Rect(10, 28, sw - 20, 25),
+            "Space = Play/Pause   Right = step   +/- = speed   B = border   R = random   G = glider   C = clear   " +
+            "S = save   L = load   O = folder   Click = cell");
+        GUI.Label(new Rect(10, 51, sw - 20, 25), _message);
     }
 
+    // Keys and mouse
     private void HandleInput(Event e, GridModel g)
     {
         if (e.type == EventType.KeyDown)
         {
-            switch (e.keyCode)
-            {
-                case KeyCode.Space:       controller.TogglePlay(); break;
-                case KeyCode.RightArrow:  controller.StepOnce(); break;
-                case KeyCode.KeypadPlus:
-                case KeyCode.Plus:
-                case KeyCode.Equals:      controller.SetSpeed(controller.TicksPerSecond * 1.5f); break;
-                case KeyCode.KeypadMinus:
-                case KeyCode.Minus:       controller.SetSpeed(controller.TicksPerSecond / 1.5f); break;
-                case KeyCode.B:
-                    controller.SetBorderMode(controller.CurrentBorderMode == BorderMode.Infini
-                        ? BorderMode.Symetrique : BorderMode.Infini);
-                    break;
-                case KeyCode.R:           RandomFill(); break;
-                case KeyCode.G:           PlaceGlider(); break;
-                case KeyCode.C:           controller.Clear(); break;
-                case KeyCode.S:           Save(); break;
-                case KeyCode.L:           LoadLatest(); break;
-                case KeyCode.O:           OpenSaveFolder(); break;
-                default: return;
-            }
-            e.Use();
+            HandleKey(e.keyCode, e);
             return;
         }
 
-        if (e.button != 0) return;
-        if (e.type != EventType.MouseDown && e.type != EventType.MouseDrag) return;
-        if (!_gridRect.Contains(e.mousePosition)) return;
+        if (e.button != 0)
+        {
+            return;
+        }
+        if (e.type != EventType.MouseDown && e.type != EventType.MouseDrag)
+        {
+            return;
+        }
+        if (!_gridRect.Contains(e.mousePosition))
+        {
+            return;
+        }
 
         float cell = _gridRect.width / g.Width;
         int x = Mathf.FloorToInt((e.mousePosition.x - _gridRect.x) / cell);
-        int y = Mathf.FloorToInt((_gridRect.yMax - e.mousePosition.y) / cell); // l'écran GUI a y vers le bas
+        int y = Mathf.FloorToInt((_gridRect.yMax - e.mousePosition.y) / cell);
 
         if (e.type == EventType.MouseDown)
-            _paintValue = !g.Get(x, y);   // le 1er clic décide si on allume ou si on éteint
+        {
+            _paintValue = !g.Get(x, y);
+        }
 
         controller.SetCell(x, y, _paintValue);
+        e.Use();
+    }
+
+    // Keyboard actions
+    private void HandleKey(KeyCode key, Event e)
+    {
+        if (key == KeyCode.Space)
+        {
+            controller.TogglePlay();
+        }
+        else if (key == KeyCode.RightArrow)
+        {
+            controller.StepOnce();
+        }
+        else if (key == KeyCode.KeypadPlus || key == KeyCode.Plus || key == KeyCode.Equals)
+        {
+            controller.SetSpeed(controller.TicksPerSecond * 1.5f);
+        }
+        else if (key == KeyCode.KeypadMinus || key == KeyCode.Minus)
+        {
+            controller.SetSpeed(controller.TicksPerSecond / 1.5f);
+        }
+        else if (key == KeyCode.B)
+        {
+            if (controller.CurrentBorderMode == BorderMode.Infinite)
+            {
+                controller.SetBorderMode(BorderMode.Symmetric);
+            }
+            else
+            {
+                controller.SetBorderMode(BorderMode.Infinite);
+            }
+        }
+        else if (key == KeyCode.R)
+        {
+            RandomFill();
+        }
+        else if (key == KeyCode.G)
+        {
+            PlaceGlider();
+        }
+        else if (key == KeyCode.C)
+        {
+            controller.Clear();
+        }
+        else if (key == KeyCode.S)
+        {
+            Save();
+        }
+        else if (key == KeyCode.L)
+        {
+            LoadLatest();
+        }
+        else if (key == KeyCode.O)
+        {
+            OpenSaveFolder();
+        }
+        else
+        {
+            return;
+        }
         e.Use();
     }
 }
