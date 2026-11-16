@@ -1,6 +1,6 @@
 GameOfLive — Le jeu de la vie de Conway sous Unity
 
-Projet réalisé en binôme à La Plateforme (Marseille), dans le cadre du sujet « Vie ou crève ».
+Projet réalisé en binôme à La Plateforme (Marseille), dans le cadre du sujet « Game of life ».
 
 Composition du groupe
 Membre	Rôle
@@ -103,13 +103,17 @@ Images PNG d'exemple
 
 Les images d'exemple sont dans le dossier examples/. Ce sont de vraies sauvegardes : 1 pixel par cellule, donc elles sont toutes petites. Les aperçus ci-dessous sont agrandis.
 
-Répartition aléatoire — examples/random_64x36.png
+Répartition aléatoire 
+<img width="462" height="457" alt="image" src="https://github.com/user-attachments/assets/d9c2ed20-2070-4e70-bf20-894802d7b13f" />
+
 
 Grille de 64 × 36, environ 30 % de cellules vivantes (663 cellules).
 
 Répartition aléatoire, aperçu agrandi
 
-Planeur (glider) — examples/glider_32x32.png
+Planeur (glider) 
+<img width="452" height="447" alt="image" src="https://github.com/user-attachments/assets/ad4ea6ec-bff8-4a9a-be69-5542feffae1e" />
+
 
 Grille de 32 × 32 avec un planeur en haut à gauche. Il avance d'une case en diagonale vers le bas à droite toutes les 4 générations. En mode Symétrique, il traverse les bords et revient de l'autre côté ; en mode Infini, il s'écrase contre le bord.
 
